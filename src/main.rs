@@ -1,5 +1,6 @@
 mod app;
 mod theme;
+mod pages;
 
 use std::sync::Arc;
 use eframe::egui;

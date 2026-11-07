@@ -1,6 +1,10 @@
 use std::time::{Duration, Instant};
 use eframe::egui;
 use sysinfo::{get_current_pid, System, ProcessesToUpdate, ProcessRefreshKind, Pid};
+use crate::pages::about::AboutPage;
+use crate::pages::home::HomePage;
+use crate::pages::settings::SettingsPage;
+use crate::pages::Page;
 use crate::theme::AppTheme;
 
 pub struct MyApp {
@@ -10,6 +14,10 @@ pub struct MyApp {
     last_refresh: Instant,
     refresh_interval: Duration,
     app_theme: AppTheme,
+    current_page: Page,
+    home: HomePage,
+    settings: SettingsPage,
+    about: AboutPage,
 }
 
 impl MyApp {
@@ -39,6 +47,10 @@ impl MyApp {
             last_refresh: Instant::now(),
             refresh_interval: Duration::from_millis(500),
             app_theme,
+            current_page: Page::default(),
+            home: HomePage::default(),
+            settings: SettingsPage::default(),
+            about: AboutPage::default(),
         }
     }
 
@@ -74,10 +86,33 @@ impl eframe::App for MyApp {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        let mb = self.memory
-            .map(|b| format!("{:.1} MB", b as f64 / 1024.0 /1024.0))
-            .unwrap_or_else(|| "N/A".to_string());
-        ui.label(format!("内存占用: {mb}"));
+        egui::Panel::left("nav_panel")
+            .resizable(false)
+            .default_size(140.0) // 默认左侧宽度
+            .show(ui, |ui| {
+                ui.style_mut().interaction.selectable_labels = false;
+                ui.add_space(10.0);
+                ui.heading("简单登录");
+                ui.separator();
+
+                for &(page, label) in Page::ALL {
+                    let response = ui.add_sized(
+                        egui::vec2(120.0, 28.0),
+                        egui::Button::selectable(self.current_page == page, label),
+                    );
+                    if response.clicked() {self.current_page = page;}
+                    ui.add_space(4.0);
+                }
+            });
+
+        // 中央内容区
+        egui::CentralPanel::default().show(ui, |ui| {
+            match self.current_page {
+                Page::Home => self.home.ui(ui),
+                Page::Settings => self.settings.ui(ui, &mut self.app_theme, self.memory),
+                Page::About => self.about.ui(ui),
+            }
+        });
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
