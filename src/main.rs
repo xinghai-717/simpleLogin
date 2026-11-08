@@ -2,8 +2,10 @@ mod app;
 mod theme;
 mod pages;
 mod widgets;
+mod logger;
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
+use std::collections::VecDeque;
 use eframe::egui;
 use crate::app::MyApp;
 use simple_login::smp;
@@ -11,6 +13,8 @@ use simple_login::smp;
 fn main() -> eframe::Result {
     let mut options = eframe::NativeOptions::default();
     let mut fonts = egui::FontDefinitions::default();
+    let log_buffer = Arc::new(Mutex::new(VecDeque::new()));
+    let _guard = logger::init_logging(log_buffer.clone());
 
     options.renderer = eframe::Renderer::Glow;
     options.viewport = egui::ViewportBuilder::default()
@@ -30,6 +34,6 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "SimpleLogin",
         options,
-        Box::new(|cc| Ok(Box::new(MyApp::new(cc,fonts))))
+        Box::new(|cc| Ok(Box::new(MyApp::new(cc, fonts, log_buffer))))
     )
 }

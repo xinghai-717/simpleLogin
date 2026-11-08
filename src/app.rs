@@ -1,11 +1,14 @@
 use std::time::{Duration, Instant};
 use eframe::egui;
+use eframe::egui::Widget;
 use sysinfo::{get_current_pid, System, ProcessesToUpdate, ProcessRefreshKind, Pid};
 use simple_login::smp::save_config;
+use crate::logger::LogBuffer;
 use crate::widgets::*;
 use crate::pages::about::AboutPage;
 use crate::pages::account::AccountPage;
 use crate::pages::home::HomePage;
+use crate::pages::logs::LogPage;
 use crate::pages::settings::SettingsPage;
 use crate::pages::Page;
 use crate::theme::AppTheme;
@@ -24,11 +27,13 @@ pub struct MyApp {
     home: HomePage,
     account: AccountPage,
     settings: SettingsPage,
+    log: LogPage,
     about: AboutPage,
+    log_buffer: LogBuffer,
 }
 
 impl MyApp {
-    pub fn new(cc: &eframe::CreationContext, fonts: egui::FontDefinitions) -> Self {
+    pub fn new(cc: &eframe::CreationContext, fonts: egui::FontDefinitions, log_buffer: LogBuffer) -> Self {
         let app_theme = cc.storage
             .and_then(|s| eframe::get_value(s, "app_theme"))
             .unwrap_or(AppTheme::System);
@@ -61,7 +66,9 @@ impl MyApp {
             home: HomePage::default(),
             account: AccountPage::new(&config),
             settings: SettingsPage::default(),
+            log: LogPage::default(),
             about: AboutPage::default(),
+            log_buffer,
         }
     }
 
@@ -125,6 +132,7 @@ impl eframe::App for MyApp {
                 Page::Home => self.home.ui(ui),
                 Page::Account => self.account.ui(ui, &mut self.toast_manager, &mut self.smp_config),
                 Page::Settings => self.settings.ui(ui, &mut self.app_theme, &self.memory),
+                Page::Logs => self.log.ui(ui),
                 Page::About => self.about.ui(ui),
             }
         });

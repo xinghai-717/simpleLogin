@@ -3,13 +3,7 @@ use keyring::Entry;
 const SERVICE_NAME: &str = "SimpleLogin";
 
 /// 保存密码
-pub fn save_password(username: &String, password: &String, old_username: &String) -> Result<(), String> {
-    if !old_username.is_empty() && old_username != username {
-        if let Err(e) = delete_password(old_username) {
-            return Err(format!("删除旧密码失败: {}", e));
-        }
-    }
-
+pub fn save_password(username: &String, password: &String) -> Result<(), String> {
     let entry = Entry::new(SERVICE_NAME, username)
         .map_err(|e| format!("创建密码条目失败: {}", e))?;
     entry.set_password(password)

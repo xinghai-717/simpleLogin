@@ -7,6 +7,7 @@ use crate::smp::crypto::SecretFormat;
 /// SMP 认证配置。存到用户配置目录下的 smp.toml。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SmpConfig {
+    pub userlist: Vec<String>,
     pub username: String,
     pub secret_format: SecretFormat,
     /// 登录成功后保存的在线字段，供 logout 使用
@@ -45,6 +46,7 @@ mod tests {
     #[test]
     fn save_and_load() {
         let cfg = SmpConfig {
+            userlist: vec![],
             username: "20230001".into(),
             secret_format: SecretFormat::PwdMac,
             online_fields: Some(HashMap::from([
