@@ -111,7 +111,7 @@ impl eframe::App for MyApp {
             .default_size(140.0) // 默认左侧宽度
             .show(ui, |ui| {
                 ui.style_mut().interaction.selectable_labels = false;
-                ui.add_space(10.0);
+                ui.add_space(6.0);
                 ui.heading("简单登录");
                 ui.separator();
 
@@ -132,7 +132,7 @@ impl eframe::App for MyApp {
                 Page::Home => self.home.ui(ui),
                 Page::Account => self.account.ui(ui, &mut self.toast_manager, &mut self.smp_config),
                 Page::Settings => self.settings.ui(ui, &mut self.app_theme, &self.memory),
-                Page::Logs => self.log.ui(ui),
+                Page::Logs => self.log.ui(ui, &self.log_buffer),
                 Page::About => self.about.ui(ui),
             }
         });

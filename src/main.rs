@@ -19,7 +19,6 @@ fn main() -> eframe::Result {
     options.renderer = eframe::Renderer::Glow;
     options.viewport = egui::ViewportBuilder::default()
         .with_inner_size([545.0, 355.0])
-        .with_resizable(false)
         .with_maximize_button(false)
         .with_visible(false);
     fonts.font_data.insert(

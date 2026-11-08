@@ -36,19 +36,17 @@ pub fn init_logging(log_buffer: LogBuffer) -> tracing_appender::non_blocking::Wo
     // 设置终端输出
     let (non_blocking, guard) = tracing_appender::non_blocking(file_appender);
 
-    let default_level = if cfg!(debug_assertions) {
-        tracing::Level::DEBUG
-    } else {
-        tracing::Level::INFO
-    };
+    let filter = EnvFilter::from_default_env()
+        .add_directive(tracing::Level::INFO.into())
+        .add_directive("simple_login=debug".parse().unwrap());
 
     let memory_writer = MemoryWriter(log_buffer);
 
     tracing_subscriber::registry()
         .with(fmt::layer().with_writer(std::io::stdout)) // 输出到控制台
-        .with(fmt::layer().with_writer(non_blocking))    // 输出到文件
-        .with(fmt::layer().with_writer(move || memory_writer.clone()))
-        .with(EnvFilter::from_default_env().add_directive(default_level.into()))
+        .with(fmt::layer().with_ansi(false).with_writer(non_blocking))    // 输出到文件
+        .with(fmt::layer().with_ansi(true).with_writer(move || memory_writer.clone()))
+        .with(filter)
         .init();
 
     tracing::info!("日志系统就绪");
