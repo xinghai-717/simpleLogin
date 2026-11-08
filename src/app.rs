@@ -1,7 +1,9 @@
 use std::time::{Duration, Instant};
 use eframe::egui;
 use sysinfo::{get_current_pid, System, ProcessesToUpdate, ProcessRefreshKind, Pid};
+use crate::widgets::*;
 use crate::pages::about::AboutPage;
+use crate::pages::account::AccountPage;
 use crate::pages::home::HomePage;
 use crate::pages::settings::SettingsPage;
 use crate::pages::Page;
@@ -14,8 +16,10 @@ pub struct MyApp {
     last_refresh: Instant,
     refresh_interval: Duration,
     app_theme: AppTheme,
+    toast_manager: ToastManager,
     current_page: Page,
     home: HomePage,
+    account: AccountPage,
     settings: SettingsPage,
     about: AboutPage,
 }
@@ -47,8 +51,10 @@ impl MyApp {
             last_refresh: Instant::now(),
             refresh_interval: Duration::from_millis(500),
             app_theme,
+            toast_manager: ToastManager::new(),
             current_page: Page::default(),
             home: HomePage::default(),
+            account: AccountPage::default(),
             settings: SettingsPage::default(),
             about: AboutPage::default(),
         }
@@ -86,6 +92,8 @@ impl eframe::App for MyApp {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        self.toast_manager.render(ui.ctx());
+
         egui::Panel::left("nav_panel")
             .resizable(false)
             .default_size(140.0) // 默认左侧宽度
@@ -95,20 +103,22 @@ impl eframe::App for MyApp {
                 ui.heading("简单登录");
                 ui.separator();
 
-                for &(page, label) in Page::ALL {
-                    let response = ui.add_sized(
-                        egui::vec2(120.0, 28.0),
-                        egui::Button::selectable(self.current_page == page, label),
-                    );
-                    if response.clicked() {self.current_page = page;}
-                    ui.add_space(4.0);
-                }
+                sliding_nav(
+                    ui,
+                    "main_nav",
+                    &mut self.current_page,
+                    Page::ALL,
+                    120.0,
+                    28.0,
+                    4.0,
+                );
             });
 
         // 中央内容区
         egui::CentralPanel::default().show(ui, |ui| {
             match self.current_page {
                 Page::Home => self.home.ui(ui),
+                Page::Account => self.account.ui(ui, &mut self.toast_manager),
                 Page::Settings => self.settings.ui(ui, &mut self.app_theme, self.memory),
                 Page::About => self.about.ui(ui),
             }
