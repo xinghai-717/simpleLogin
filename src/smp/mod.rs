@@ -3,11 +3,16 @@ mod crypto;
 mod parser;
 mod info;
 mod config;
+mod credential;
 
 pub use client::{
     make_client, get_intercept_url, do_status, do_login, do_logout, AuthStatus, LoginParams, LoginResult,
 };
 
 pub use config::{
-    load,save,
+    SmpConfig, load_config, save_config,
+};
+
+pub use credential::{
+    load_password, save_password, delete_password,
 };

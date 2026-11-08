@@ -8,7 +8,6 @@ use crate::smp::crypto::SecretFormat;
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SmpConfig {
     pub username: String,
-    pub password: String,
     pub secret_format: SecretFormat,
     /// 登录成功后保存的在线字段，供 logout 使用
     pub online_fields: Option<HashMap<String, String>>,
@@ -21,14 +20,14 @@ pub fn config_path() -> Option<PathBuf> {
 }
 
 /// 读取配置
-pub fn load() -> SmpConfig {
+pub fn load_config() -> SmpConfig {
     let Some(path) = config_path() else { return SmpConfig::default() };
     let Ok(text) = std::fs::read_to_string(&path) else { return SmpConfig::default() };
     toml::from_str(&text).unwrap_or_default()
 }
 
 /// 保存配置
-pub fn save(config: &SmpConfig) -> std::io::Result<()>{
+pub fn save_config(config: &SmpConfig) -> std::io::Result<()>{
     let path = config_path()
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "无法确定配置目录"))?;
     if let Some(parent) = path.parent() {
@@ -47,15 +46,14 @@ mod tests {
     fn save_and_load() {
         let cfg = SmpConfig {
             username: "20230001".into(),
-            password: "secret".into(),
             secret_format: SecretFormat::PwdMac,
             online_fields: Some(HashMap::from([
                 ("userIndex".into(), "42".into()),
                 ("loginUniqueCodeForOnline".into(), "abc".into()),
             ])),
         };
-        save(&cfg).expect("saving config error");
-        let back: SmpConfig = load();
+        save_config(&cfg).expect("saving config error");
+        let back: SmpConfig = load_config();
         let path_str = config_path()
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_default();

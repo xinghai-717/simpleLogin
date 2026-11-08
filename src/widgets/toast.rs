@@ -44,10 +44,6 @@ impl ToastManager {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.toasts.is_empty()
-    }
-
     pub fn push(&mut self, level: ToastLevel, message: impl Into<String>) {
         // 限制最多 2 个，超出强制最早的滑出
         if self.toasts.len() >= 2 {

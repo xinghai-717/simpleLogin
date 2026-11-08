@@ -1,6 +1,7 @@
 use std::time::{Duration, Instant};
 use eframe::egui;
 use sysinfo::{get_current_pid, System, ProcessesToUpdate, ProcessRefreshKind, Pid};
+use simple_login::smp::save_config;
 use crate::widgets::*;
 use crate::pages::about::AboutPage;
 use crate::pages::account::AccountPage;
@@ -8,6 +9,7 @@ use crate::pages::home::HomePage;
 use crate::pages::settings::SettingsPage;
 use crate::pages::Page;
 use crate::theme::AppTheme;
+use crate::smp::{SmpConfig, load_config};
 
 pub struct MyApp {
     sys: System,
@@ -16,6 +18,7 @@ pub struct MyApp {
     last_refresh: Instant,
     refresh_interval: Duration,
     app_theme: AppTheme,
+    smp_config: SmpConfig,
     toast_manager: ToastManager,
     current_page: Page,
     home: HomePage,
@@ -29,6 +32,7 @@ impl MyApp {
         let app_theme = cc.storage
             .and_then(|s| eframe::get_value(s, "app_theme"))
             .unwrap_or(AppTheme::System);
+        let config = load_config();
         cc.egui_ctx.set_theme(match app_theme {
             AppTheme::System => {egui::ThemePreference::System}
             AppTheme::Light => {egui::ThemePreference::Light}
@@ -51,10 +55,11 @@ impl MyApp {
             last_refresh: Instant::now(),
             refresh_interval: Duration::from_millis(500),
             app_theme,
+            smp_config: config.clone(),
             toast_manager: ToastManager::new(),
             current_page: Page::default(),
             home: HomePage::default(),
-            account: AccountPage::default(),
+            account: AccountPage::new(&config),
             settings: SettingsPage::default(),
             about: AboutPage::default(),
         }
@@ -118,8 +123,8 @@ impl eframe::App for MyApp {
         egui::CentralPanel::default().show(ui, |ui| {
             match self.current_page {
                 Page::Home => self.home.ui(ui),
-                Page::Account => self.account.ui(ui, &mut self.toast_manager),
-                Page::Settings => self.settings.ui(ui, &mut self.app_theme, self.memory),
+                Page::Account => self.account.ui(ui, &mut self.toast_manager, &mut self.smp_config),
+                Page::Settings => self.settings.ui(ui, &mut self.app_theme, &self.memory),
                 Page::About => self.about.ui(ui),
             }
         });
@@ -127,6 +132,7 @@ impl eframe::App for MyApp {
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, "app_theme", &self.app_theme);
+        save_config(&self.smp_config).expect("保存配置文件时发生错误");
     }
 
     fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
