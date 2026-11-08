@@ -44,6 +44,7 @@ impl MyApp {
             AppTheme::Dark => {egui::ThemePreference::Dark}
         });
         cc.egui_ctx.set_fonts(fonts);
+        cc.egui_ctx.set_zoom_factor(1.2);
 
         let mut sys = System::new().unwrap();
         let pid = get_current_pid().ok().expect("无法读取当前PID");

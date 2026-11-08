@@ -32,10 +32,16 @@ impl AccountPage {
 
         // 垂直居中容器
         ui.vertical_centered(|ui| {
-            ui.add_space(20.0);
+            let form_height = 270.0;
+
+            let available_height = ui.available_height();
+            let top_space = ((available_height - form_height) / 2.0).max(20.0);
+
+            ui.add_space(top_space);
 
             // 表单最大宽度
-            let form_width = 280.0;
+            let form_width = (ui.available_width() * 0.8).clamp(260.0, 400.0);
+            let input_width = form_width - 55.0;
 
             // 固定这块区域宽度，并左对齐
             ui.allocate_ui_with_layout(
@@ -79,14 +85,14 @@ impl AccountPage {
                         .show(ui, |ui| {
                             ui.label("账号:");
                             ui.add_sized(
-                                [180.0, 26.0],
+                                [input_width, 26.0],
                                 egui::TextEdit::singleline(&mut self.singleline_username).margin(egui::vec2(8.0, 4.0))
                             );
                             ui.end_row();
 
                             ui.label("密码:");
                             ui.add_sized(
-                                [180.0, 26.0],
+                                [input_width, 26.0],
                                 egui::TextEdit::singleline(&mut self.singleline_password)
                                     .password(true)
                                     .font(egui::TextStyle::Monospace)
@@ -151,7 +157,8 @@ impl AccountPage {
 
                     ui.add_space(6.0);
 
-                    if ui.add_sized([form_width, 24.0], egui::Button::new("取消").small()).clicked() {
+                    // 取消按钮自动撑满动态宽度
+                    if ui.add_sized([form_width, 32.0], egui::Button::new("取消")).clicked() {
                         self.singleline_username = self.username.clone();
                         self.singleline_password = self.password.clone();
                     }
