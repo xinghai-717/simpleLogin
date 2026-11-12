@@ -99,9 +99,9 @@ pub enum LoginResult {
 /// SMP 登录参数。
 ///
 /// RSA 加密由 `do_login` 内部完成
-pub struct LoginParams<'a> {
-    pub username: &'a str,
-    pub password: &'a str,
+pub struct LoginParams {
+    pub username: String,
+    pub password: String,
     pub secret_format: SecretFormat,
 }
 
@@ -155,7 +155,7 @@ pub fn do_login(client: &Client, params: LoginParams) -> LoginResult {
     };
 
     // 加密密码
-    let secret = build_secret(params.password, params.secret_format, &mac, &user_ip);
+    let secret = build_secret(&params.password, params.secret_format, &mac, &user_ip);
     let enc_pwd = rsa_encrypt(&secret, &exponent, &module);
 
     // POST body
