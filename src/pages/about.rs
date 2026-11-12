@@ -6,7 +6,7 @@ pub struct AboutPage {
 }
 
 impl AboutPage {
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
+    pub fn ui(&mut self, _ui: &mut egui::Ui) {
 
     }
 }

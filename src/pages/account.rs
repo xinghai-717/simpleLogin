@@ -1,6 +1,7 @@
 use eframe::egui;
 use crate::widgets::{ToastLevel, ToastManager};
-use tracing::{error, info};
+use tracing::error;
+use simple_login::smp::AuthStatus;
 use crate::smp::{SmpConfig, load_password, save_password, delete_password};
 
 #[derive(Default)]
@@ -26,7 +27,7 @@ impl AccountPage {
         page
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui, toasts: &mut ToastManager, smp_config: &mut SmpConfig) {
+    pub fn ui(&mut self, ui: &mut egui::Ui, toasts: &mut ToastManager, smp_config: &mut SmpConfig, auth_status: &Option<AuthStatus>) {
         ui.heading("账号");
         ui.separator();
 
@@ -107,52 +108,63 @@ impl AccountPage {
                     ui.horizontal(|ui| {
                         let btn_width = (form_width - 8.0) / 2.0;
 
-                        if ui.add_sized([btn_width, 32.0], egui::Button::new("保存账号")).clicked() {
-                            if self.singleline_username.is_empty() || self.singleline_password.is_empty() {
-                                toasts.push(ToastLevel::Warning, "账号或密码不能为空");
-                                return;
-                            }
+                        let mut save_enable = true;
 
-                            match save_password(&self.singleline_username, &self.singleline_password) {
-                                Ok(_) => {
-                                    if !smp_config.userlist.contains(&self.singleline_username) {
-                                        smp_config.userlist.push(self.singleline_username.clone());
+                        if matches!(auth_status, Some(AuthStatus::Online)) {
+                            save_enable = false;
+                        }
+
+                        ui.add_enabled_ui(save_enable, |ui| {
+                            let btn_save = ui.add_sized([btn_width, 32.0], egui::Button::new("保存账号"));
+                            btn_save.clone().on_disabled_hover_text("请先下线再经行操作");
+                            if btn_save.clicked() {
+                                if self.singleline_username.is_empty() || self.singleline_password.is_empty() {
+                                    toasts.push(ToastLevel::Warning, "账号或密码不能为空");
+                                    return;
+                                }
+
+                                match save_password(&self.singleline_username, &self.singleline_password) {
+                                    Ok(_) => {
+                                        if !smp_config.userlist.contains(&self.singleline_username) {
+                                            smp_config.userlist.push(self.singleline_username.clone());
+                                        }
+
+                                        smp_config.username = self.singleline_username.clone();
+                                        self.username = self.singleline_username.clone();
+                                        self.password = self.singleline_password.clone();
+                                        toasts.push(ToastLevel::Success, "账号保存成功");
                                     }
-
-                                    smp_config.username = self.singleline_username.clone();
-                                    self.username = self.singleline_username.clone();
-                                    self.password = self.singleline_password.clone();
-                                    toasts.push(ToastLevel::Success, "账号保存成功");
-                                }
-                                Err(e) => {
-                                    toasts.push(ToastLevel::Error, "保存失败");
-                                    error!("保存失败: {}", e);
+                                    Err(e) => {
+                                        toasts.push(ToastLevel::Error, "保存失败");
+                                        error!("保存失败: {}", e);
+                                    }
                                 }
                             }
-                        }
-
-                        if ui.add_sized([btn_width, 32.0], egui::Button::new("删除账号")).clicked() {
-                            if self.username.is_empty() {
-                                toasts.push(ToastLevel::Warning, "当前没有保存的账号");
-                                return;
-                            }
-
-                            match delete_password(&self.username) {
-                                Ok(_) => {
-                                    smp_config.userlist.retain(|x| x != &self.username);
-                                    self.singleline_username.clear();
-                                    self.singleline_password.clear();
-                                    self.username.clear();
-                                    self.password.clear();
-                                    smp_config.username.clear();
-                                    toasts.push(ToastLevel::Success, "账号记录清空成功");
+                            let btn_delete = ui.add_sized([btn_width, 32.0], egui::Button::new("删除账号"));
+                            btn_delete.clone().on_disabled_hover_text("请先下线再经行操作");
+                            if btn_delete.clicked() {
+                                if self.username.is_empty() {
+                                    toasts.push(ToastLevel::Warning, "当前没有保存的账号");
+                                    return;
                                 }
-                                Err(e) => {
-                                    toasts.push(ToastLevel::Error, "清空账号时发生错误");
-                                    error!("清空账号时发生错误: {}", e);
+
+                                match delete_password(&self.username) {
+                                    Ok(_) => {
+                                        smp_config.userlist.retain(|x| x != &self.username);
+                                        self.singleline_username.clear();
+                                        self.singleline_password.clear();
+                                        self.username.clear();
+                                        self.password.clear();
+                                        smp_config.username.clear();
+                                        toasts.push(ToastLevel::Success, "账号记录清空成功");
+                                    }
+                                    Err(e) => {
+                                        toasts.push(ToastLevel::Error, "清空账号时发生错误");
+                                        error!("清空账号时发生错误: {}", e);
+                                    }
                                 }
                             }
-                        }
+                        });
                     });
 
                     ui.add_space(6.0);

@@ -3,7 +3,7 @@ use reqwest::blocking::Client;
 use simple_login::smp::{AuthStatus, do_status, do_login, do_logout, LoginResult, LogoutResult, LoginParams, SmpConfig};
 use tracing::{info, error, warn};
 use crate::widgets::{ToastLevel, ToastManager};
-use crate::smp::{SecretFormat, save_config};
+use crate::smp::save_config;
 use std::sync::mpsc::{channel, Receiver};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

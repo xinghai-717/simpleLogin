@@ -195,7 +195,7 @@ impl eframe::App for MyApp {
                     &self.account.username,
                     &self.account.password
                 ),
-                Page::Account => self.account.ui(ui, &mut self.toast_manager, &mut self.smp_config),
+                Page::Account => self.account.ui(ui, &mut self.toast_manager, &mut self.smp_config, &self.home.status),
                 Page::Settings => self.settings.ui(ui, &mut self.app_theme, &self.memory),
                 Page::Logs => self.log.ui(ui, &self.log_buffer),
                 Page::About => self.about.ui(ui),
