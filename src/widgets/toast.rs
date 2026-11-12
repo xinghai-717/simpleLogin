@@ -68,24 +68,14 @@ impl ToastManager {
     }
 
     pub fn render(&mut self, ctx: &egui::Context) {
-        let screen_rect = ctx.content_rect();
         let now = Instant::now();
 
-        let toast_width = 220.0;
-        let toast_height = 48.0;
         let margin = 20.0;
         let spacing = 10.0;
-
         let enter_time = 0.35;
-        // 干脆利落的 0.2 秒滑出
         let exit_time = 0.2;
 
         let mut to_remove = Vec::new();
-
-        // 正常完全显示时，弹窗的左侧 X 坐标
-        let target_x = screen_rect.right() - toast_width - margin;
-        // 完全隐藏时，弹窗的左侧 X 坐标（刚好越过屏幕右侧边界）
-        let offscreen_x = screen_rect.right() + 10.0;
 
         for (i, toast) in self.toasts.iter_mut().enumerate() {
             if !toast.closing && now.duration_since(toast.created_at) > toast.duration {
@@ -93,50 +83,65 @@ impl ToastManager {
                 toast.close_start_time = Some(now);
             }
 
-            let current_x = if toast.closing {
-                let t_exit = (now - toast.close_start_time.unwrap()).as_secs_f32() / exit_time;
+            // 👈 1. 计算 X 轴滑动偏移量 (基于锚点的相对距离)
+            // 正常显示时，距离右边缘 -margin
+            let target_x_offset = -margin;
+            // 滑出屏幕外时，向右偏移 400 像素
+            let offscreen_x_offset = 400.0;
 
+            let current_offset_x = if toast.closing {
+                let t_exit = (now - toast.close_start_time.unwrap()).as_secs_f32() / exit_time;
                 if t_exit >= 1.0 {
                     to_remove.push(i);
                     continue;
                 }
-
-                // 改用二次方加速，让它是“飞”出去的，而不是匀速平移
                 let t = t_exit * t_exit;
-                target_x + (offscreen_x - target_x) * t
+                target_x_offset + (offscreen_x_offset - target_x_offset) * t
             } else {
                 let t_enter = (now - toast.enter_start_time).as_secs_f32() / enter_time;
-                // 滑入保持回弹感
                 let t = ease_out_back(t_enter.clamp(0.0, 1.0));
-                offscreen_x + (target_x - offscreen_x) * t
+                offscreen_x_offset + (target_x_offset - offscreen_x_offset) * t
             };
 
-            // Y 轴丝滑补位
-            let target_y = screen_rect.bottom() - margin - (toast_height + spacing) * i as f32 - toast_height;
-            let current_y = ctx.animate_value_with_time(
+            // 👈 2. 计算 Y 轴堆叠偏移量
+            let toast_height = 48.0;
+            let target_y_offset = -margin - (toast_height + spacing) * i as f32;
+            let current_y_offset = ctx.animate_value_with_time(
                 Id::unique(("toast_y", toast.id)),
-                target_y,
+                target_y_offset,
                 0.2,
             );
 
-            // 滑出时，最后半段开始淡出
+            // 透明度动画
             let opacity = if toast.closing {
                 let t_exit = (now - toast.close_start_time.unwrap()).as_secs_f32() / exit_time;
-                // 前 50% 的时间透明度为 1，后 50% 的时间透明度从 1 降到 0
                 (1.0 - (t_exit - 0.5).max(0.0) * 2.0).clamp(0.0, 1.0)
             } else {
                 let t_enter = (now - toast.enter_start_time).as_secs_f32() / enter_time;
                 t_enter.clamp(0.0, 1.0)
             };
 
-            let pos = egui::pos2(current_x, current_y);
             let level_color = toast.level.color();
             let area_id = Id::unique(("toast_area", toast.id));
 
+            // 👈 1. 精确测量文本宽度
+            let painter = ctx.layer_painter(egui::LayerId::new(Order::Background, Id::new("toast_measure")));
+            let galley = painter.layout_no_wrap(
+                toast.message.clone(),
+                egui::FontId::proportional(13.0),
+                Color32::WHITE,
+            );
+            let text_width = galley.size().x;
+
+            // 👈 2. 根据文字长度计算弹窗总宽度
+            // 基础宽度 60.0 = 左侧竖条(4) + 间距(8) + 右侧X按钮(28) + 左右内边距(20)
+            // 限制最小 120，最大 400（超过 400 就会截断）
+            let total_width = (text_width + 60.0).clamp(120.0, 400.0);
+
             let response = egui::Area::new(area_id)
                 .order(Order::Foreground)
-                .fixed_pos(pos)
-                .constrain(false) // 允许飞出窗口边缘
+                .anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(current_offset_x, current_y_offset))
+                .constrain(false)
                 .show(ctx, |ui| {
                     let is_dark = ui.visuals().dark_mode;
                     let bg_color = if is_dark {
@@ -159,22 +164,36 @@ impl ToastManager {
                         });
 
                     frame.show(ui, |ui| {
-                        ui.set_width(toast_width - 20.0);
+                        // 👈 3. 强制限制整个 UI 的宽度
+                        ui.set_width(total_width - 20.0); // 减去 Frame 的左右 10px 内边距
+
                         ui.horizontal(|ui| {
+                            // 左侧竖条
                             let (rect, _) = ui.allocate_exact_size(egui::vec2(4.0, 16.0), egui::Sense::hover());
                             ui.painter().rect_filled(rect, 2.0, level_color.gamma_multiply(opacity));
                             ui.add_space(4.0);
-                            ui.label(RichText::new(&toast.message).color(text_color).size(13.0));
 
-                            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                                let btn = egui::Button::new(RichText::new("X").size(12.0).color(text_color)).frame(false);
-                                if ui.add(btn).clicked() {
-                                    if !toast.closing {
-                                        toast.closing = true;
-                                        toast.close_start_time = Some(now);
-                                    }
+                            // 👈 4. 给文字精确分配空间，逼迫它截断
+                            let available_for_text = ui.available_width() - 24.0; // 留出 24px 给右侧按钮
+                            ui.allocate_ui_with_layout(
+                                egui::vec2(available_for_text, ui.available_height()),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.add(
+                                        egui::Label::new(RichText::new(&toast.message).color(text_color).size(13.0))
+                                            .truncate()
+                                    );
                                 }
-                            });
+                            );
+
+                            // 右侧关闭按钮
+                            let btn = egui::Button::new(RichText::new("X").size(12.0).color(text_color)).frame(false);
+                            if ui.add(btn).clicked() {
+                                if !toast.closing {
+                                    toast.closing = true;
+                                    toast.close_start_time = Some(now);
+                                }
+                            }
                         });
                     });
                 });
@@ -193,7 +212,6 @@ impl ToastManager {
         }
 
         if !self.toasts.is_empty() {
-            // 只要有弹窗，强制 16ms 刷新一次（60fps），防止卡顿
             ctx.request_repaint_after(Duration::from_millis(16));
         }
     }

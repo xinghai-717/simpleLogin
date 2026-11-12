@@ -1,10 +1,11 @@
 use eframe::egui;
 use reqwest::blocking::Client;
-use simple_login::smp::{AuthStatus, do_status, do_login, do_logout, LoginResult, LogoutResult, LoginParams, SmpConfig};
-use tracing::{info, error, warn};
+use simple_login::smp::{AuthStatus, do_status, do_login, do_logout, LoginResult, LogoutResult, LoginParams, SmpConfig, get_intercept_url};
+use tracing::{info, error, warn, debug};
 use crate::widgets::{ToastLevel, ToastManager};
 use crate::smp::save_config;
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{channel, Receiver, TryRecvError};
+use reqwest::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetworkOperation { Online, Offline }
@@ -24,6 +25,8 @@ pub struct HomePage {
     selected_op: NetworkOperation,
     pub is_processing: bool,
     result_rx: Option<Receiver<NetOpResult>>,
+    get_intercept_url_result_rx: Option<Receiver<Result<Option<String>, Error>>>,
+    pub intercept_url: String,
 }
 
 impl HomePage {
@@ -34,6 +37,8 @@ impl HomePage {
             selected_op: NetworkOperation::default(),
             is_processing: false,
             result_rx: None,
+            get_intercept_url_result_rx: None,
+            intercept_url: String::new(),
         }
     }
 
@@ -133,71 +138,124 @@ impl HomePage {
                     let _ = tx.send(result);
                 });
             }
+
+            if ui.button("打开网页认证").clicked() {
+                info!("开始尝试网络操作...");
+                let (tx, rx) = channel();
+                self.get_intercept_url_result_rx = Some(rx);
+                let client_clone = client.clone();
+                std::thread::spawn(move || {
+                    let result = get_intercept_url(&client_clone);
+                    let _ = tx.send(result);
+                });
+            };
         }
 
         // 5. 轮询后台线程是否发回了结果
         if let Some(rx) = &self.result_rx {
-            if let Ok(result) = rx.try_recv() {
-                self.is_processing = false;
-                self.result_rx = None; // 清理通道
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.is_processing = false;
+                    self.result_rx = None; // 清理通道
 
-                match result {
-                    NetOpResult::Login(login_res) => {
-                        match login_res {
-                            LoginResult::AlreadyOnline => {
-                                toast_manager.push(ToastLevel::Warning, "您已上线");
-                                self.status = Some(AuthStatus::Online);
-                            }
-                            LoginResult::Success { online_fields, .. } => {
-                                smp_config.online_fields = Some(online_fields);
-                                if save_config(smp_config).is_err() {
-                                    toast_manager.push(ToastLevel::Error, "保存登录信息失败");
-                                } else {
-                                    toast_manager.push(ToastLevel::Success, "登录成功");
+                    match result {
+                        NetOpResult::Login(login_res) => {
+                            match login_res {
+                                LoginResult::AlreadyOnline => {
+                                    toast_manager.push(ToastLevel::Warning, "您已上线");
+                                    self.status = Some(AuthStatus::Online);
                                 }
-                                self.status = Some(AuthStatus::Online); // 👈 实时更新界面状态
-                            }
-                            LoginResult::Failed { visible, title } => {
-                                let reason = if !visible.is_empty() { visible } else { title };
-                                toast_manager.push(ToastLevel::Error, format!("登录失败: {}", reason));
-                            }
-                            LoginResult::NetworkError(e) => {
-                                toast_manager.push(ToastLevel::Error, "无法完成登录：网络错误");
-                                error!("网络错误: {}", e);
-                            }
-                            LoginResult::MissingModule => {
-                                toast_manager.push(ToastLevel::Error, "无法完成登录：模数丢失");
+                                LoginResult::Success { online_fields, .. } => {
+                                    smp_config.online_fields = Some(online_fields);
+                                    if save_config(smp_config).is_err() {
+                                        toast_manager.push(ToastLevel::Error, "保存登录信息失败");
+                                    } else {
+                                        toast_manager.push(ToastLevel::Success, "登录成功");
+                                    }
+                                    self.status = Some(AuthStatus::Online); // 👈 实时更新界面状态
+                                }
+                                LoginResult::Failed { visible, title } => {
+                                    let reason = if !visible.is_empty() { visible } else { title };
+                                    toast_manager.push(ToastLevel::Error, format!("登录失败: {}", reason));
+                                }
+                                LoginResult::NetworkError(e) => {
+                                    toast_manager.push(ToastLevel::Error, "无法完成登录：网络错误");
+                                    error!("网络错误: {}", e);
+                                }
+                                LoginResult::MissingModule => {
+                                    toast_manager.push(ToastLevel::Error, "无法完成登录：模数丢失");
+                                }
                             }
                         }
-                    }
-                    NetOpResult::Logout(logout_res) => {
-                        match logout_res {
-                            LogoutResult::AlreadyOffline => {
-                                toast_manager.push(ToastLevel::Warning, "已经退出登录了");
-                                self.status = Some(AuthStatus::Offline { intercept_url: String::new() });
-                            }
-                            LogoutResult::Success => {
-                                toast_manager.push(ToastLevel::Success, "退出登录成功");
-                                self.status = Some(AuthStatus::Offline { intercept_url: String::new() });
-                            }
-                            LogoutResult::Failed { title, visible } => {
-                                let reason = if !visible.is_empty() { visible } else { title };
-                                toast_manager.push(ToastLevel::Error, format!("退出登录失败: {}", reason));
-                            }
-                            LogoutResult::NoOnlineInfo => {
-                                toast_manager.push(ToastLevel::Warning, "没有缓存在线信息，无法登出");
-                                warn!("没有缓存在线信息，无法登出");
-                            }
-                            LogoutResult::NetworkError(e) => {
-                                toast_manager.push(ToastLevel::Error, "无法退出登录：网络错误");
-                                error!("网络错误: {}", e);
+                        NetOpResult::Logout(logout_res) => {
+                            match logout_res {
+                                LogoutResult::AlreadyOffline => {
+                                    toast_manager.push(ToastLevel::Warning, "已经退出登录了");
+                                    self.status = Some(AuthStatus::Offline { intercept_url: String::new() });
+                                }
+                                LogoutResult::Success => {
+                                    toast_manager.push(ToastLevel::Success, "退出登录成功");
+                                    self.status = Some(AuthStatus::Offline { intercept_url: String::new() });
+                                }
+                                LogoutResult::Failed { title, visible } => {
+                                    let reason = if !visible.is_empty() { visible } else { title };
+                                    toast_manager.push(ToastLevel::Error, format!("退出登录失败: {}", reason));
+                                }
+                                LogoutResult::NoOnlineInfo => {
+                                    toast_manager.push(ToastLevel::Warning, "没有缓存在线信息，无法登出");
+                                    warn!("没有缓存在线信息，无法登出");
+                                }
+                                LogoutResult::NetworkError(e) => {
+                                    toast_manager.push(ToastLevel::Error, "无法退出登录：网络错误");
+                                    error!("网络错误: {}", e);
+                                }
                             }
                         }
                     }
                 }
-            } else {
-                // 如果后台还在跑，请求 egui 保持高频刷新，让加载圈转起来
-                ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
+                Err(TryRecvError::Empty) => {
+                    ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
+                }
+                Err(TryRecvError::Disconnected) => {
+                    self.is_processing = false;
+                    self.result_rx = None;
+                    toast_manager.push(ToastLevel::Error, "线程意外终止");
+                    error!("NetOpResult 线程 Disconnected");
+                }
+            }
+        }
+
+        if let Some(rx) = &self.get_intercept_url_result_rx {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.get_intercept_url_result_rx = None;
+                    match result {
+                        Ok(Some(url)) => {
+                            self.intercept_url = url.clone();
+                            toast_manager.push(ToastLevel::Success, "获取认证链接成功，正在打开浏览器...");
+                            if let Err(e) = open::that(&url) {
+                                error!("无法打开浏览器: {}", e);
+                                toast_manager.push(ToastLevel::Error, "无法打开默认浏览器");
+                            }
+                        }
+                        Ok(None) => {
+                            toast_manager.push(ToastLevel::Warning, "您当前已在线");
+                            self.status = Some(AuthStatus::Online);
+                        }
+                        Err(e) => {
+                            toast_manager.push(ToastLevel::Error, "获取认证链接失败");
+                            error!("获取认证链接失败: {}", e);
+                        }
+                    }
+                }
+                Err(TryRecvError::Empty) => {
+                    ui.ctx().request_repaint_after(std::time::Duration::from_millis(50));
+                }
+                Err(TryRecvError::Disconnected) => {
+                    self.get_intercept_url_result_rx = None;
+                    toast_manager.push(ToastLevel::Error, "线程意外终止");
+                    error!("get_intercept_url 线程 Disconnected");
+                }
             }
         }
     }
