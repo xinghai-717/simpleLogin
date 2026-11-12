@@ -10,6 +10,9 @@ codegen-units = 16
 lto = false
 incremental = true
 
+[build-dependencies]
+winres = "0.1.12"
+
 [dependencies]
 directories = "6.0.0"
 eframe = { version = "0.37.0", features = ["glow", "persistence"] }
@@ -26,6 +29,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tracing-appender = "0.2.5"
 url = "2.5.8"
-keyring-search = "1.2.2"
 shipup = "0.5.1"
 open = "5.4.5"
+tray-icon = "0.26.1"
+image = "0.25.10"

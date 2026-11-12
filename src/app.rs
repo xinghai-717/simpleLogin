@@ -14,8 +14,14 @@ use crate::pages::Page;
 use crate::theme::AppTheme;
 use crate::smp::{SmpConfig, load_config, make_client, do_status};
 use reqwest::blocking::Client;
+use tray_icon::menu::MenuEvent;
+use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
+use crate::tray::TrayApp;
 
 pub struct MyApp {
+    tray_app: TrayApp,
+    is_window_visible: bool,
+    is_quitting: bool,
     sys: System,
     pid: Pid,
     memory: Option<u64>,
@@ -34,12 +40,16 @@ pub struct MyApp {
     about: AboutPage,
     log_buffer: LogBuffer,
     client: Client,
-    // 👈 新增：用于接收后台异步状态检测的结果
     status_rx: Option<std::sync::mpsc::Receiver<AuthStatus>>,
 }
 
 impl MyApp {
-    pub fn new(cc: &eframe::CreationContext, fonts: egui::FontDefinitions, log_buffer: LogBuffer) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext,
+        fonts: egui::FontDefinitions,
+        log_buffer: LogBuffer,
+        tray_app: TrayApp,
+    ) -> Self {
         let app_theme = cc.storage
             .and_then(|s| eframe::get_value(s, "app_theme"))
             .unwrap_or(AppTheme::System);
@@ -69,6 +79,9 @@ impl MyApp {
         let client = make_client();
 
         Self {
+            tray_app,
+            is_window_visible: true,
+            is_quitting: false,
             sys,
             pid,
             memory,
@@ -87,7 +100,7 @@ impl MyApp {
             about: AboutPage::default(),
             log_buffer,
             client,
-            status_rx: None, // 👈 初始化通道
+            status_rx: None,
         }
     }
 
@@ -158,6 +171,48 @@ impl eframe::App for MyApp {
         self.refresh_memory_if_needed();
         self.refresh_network_status_async(ctx);
 
+        // 检查是否有“关闭窗口”的请求
+        if ctx.input(|i| i.viewport().close_requested()) && !self.is_quitting {
+            // 发送 CancelClose，阻止程序退出
+            ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+
+            // 隐藏主窗口（实现“最小化到托盘”）
+            ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+
+            // 记录窗口状态为隐藏（供托盘逻辑使用）
+            self.is_window_visible = false;
+        }
+
+        // 处理托盘菜单点击事件
+        if let Ok(event) = MenuEvent::receiver().try_recv() {
+            if event.id == self.tray_app.quit_item.id() {
+                // 点击了“退出”
+                self.is_quitting = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close)
+            } else if event.id == self.tray_app.show_item.id() {
+                // 点击了“显示主界面”
+                self.is_window_visible = true;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+            }
+        }
+
+        // 处理托盘图标点击事件（左键点击切换窗口显示/隐藏）
+        if let Ok(event) = TrayIconEvent::receiver().try_recv() {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                self.is_window_visible = !self.is_window_visible;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(self.is_window_visible));
+                if self.is_window_visible {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+                }
+            }
+        }
+
         // 保证 100ms 左右有一帧重绘，让界面保持流畅
         ctx.request_repaint_after(Duration::from_millis(100));
     }
@@ -214,17 +269,13 @@ impl eframe::App for MyApp {
         }
     }
 
-    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
-        visuals.panel_fill.to_normalized_gamma_f32()
-    }
-
-    // 👈 优化：关闭窗口时不能卡 UI，丢进后台去发请求
+    // 关闭窗口时不能卡 UI，丢进后台去发请求
     fn on_exit(&mut self, _gl: Option<&Context>) {
         if self.smp_config.online_fields.is_some() {
             let config_clone = self.smp_config.clone();
             std::thread::spawn(move || {
                 // 给关闭时的请求一个极短超时（比如1秒），确保不拖沓
-                let short_client = reqwest::blocking::Client::builder()
+                let short_client = Client::builder()
                     .timeout(Duration::from_secs(1))
                     .no_proxy()
                     .build();
@@ -234,5 +285,9 @@ impl eframe::App for MyApp {
                 }
             });
         }
+    }
+
+    fn clear_color(&self, visuals: &egui::Visuals) -> [f32; 4] {
+        visuals.panel_fill.to_normalized_gamma_f32()
     }
 }
