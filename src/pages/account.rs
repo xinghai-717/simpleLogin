@@ -116,7 +116,7 @@ impl AccountPage {
 
                         ui.add_enabled_ui(save_enable, |ui| {
                             let btn_save = ui.add_sized([btn_width, 32.0], egui::Button::new("保存账号"));
-                            btn_save.clone().on_disabled_hover_text("请先下线再经行操作");
+                            btn_save.clone().on_disabled_hover_text("请先下线再进行操作");
                             if btn_save.clicked() {
                                 if self.singleline_username.is_empty() || self.singleline_password.is_empty() {
                                     toasts.push(ToastLevel::Warning, "账号或密码不能为空");
@@ -141,7 +141,7 @@ impl AccountPage {
                                 }
                             }
                             let btn_delete = ui.add_sized([btn_width, 32.0], egui::Button::new("删除账号"));
-                            btn_delete.clone().on_disabled_hover_text("请先下线再经行操作");
+                            btn_delete.clone().on_disabled_hover_text("请先下线再进行操作");
                             if btn_delete.clicked() {
                                 if self.username.is_empty() {
                                     toasts.push(ToastLevel::Warning, "当前没有保存的账号");
