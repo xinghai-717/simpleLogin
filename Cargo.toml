@@ -1,6 +1,6 @@
 [package]
 name = "simple_login"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 
 [profile.dev]
@@ -27,3 +27,4 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tracing-appender = "0.2.5"
 url = "2.5.8"
 keyring-search = "1.2.2"
+shipup = "0.5.1"

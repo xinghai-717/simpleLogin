@@ -3,6 +3,7 @@ mod theme;
 mod pages;
 mod widgets;
 mod logger;
+mod updater;
 
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;

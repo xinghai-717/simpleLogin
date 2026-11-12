@@ -1,0 +1,14 @@
+{
+  "version": "0.1.1",
+  "force_update": false,
+  "pub_date": "2026-11-12T13:26:29Z",
+  "packages": {
+    "x86_64-pc-windows-msvc": {
+      "url": "https://simplelogin.wrh6.qzz.io/simplelogin.exe",
+      "signature": "YxFMZs40hxk5jactG33nvZG27HHVyMjNHtBJeNLpDN4ilXPbE1I9dWSz6BdLYx3O1N4L/S/mSKHFmxuOC6MrDA==",
+      "checksum": "sha256:22a99e81dd131734dc1a91b8cc40b36d174e616e106d0dab0e971b3ccfffecaf",
+      "package_type": "binary",
+      "size": 35586048
+    }
+  }
+}
