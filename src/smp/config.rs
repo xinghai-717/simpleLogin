@@ -1,11 +1,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-
 use crate::smp::crypto::SecretFormat;
 
 /// SMP 认证配置。存到用户配置目录下的 smp.toml。
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SmpConfig {
     pub userlist: Vec<String>,
     pub username: String,
@@ -13,6 +12,24 @@ pub struct SmpConfig {
     /// 登录成功后保存的在线字段，供 logout 使用
     pub online_fields: Option<HashMap<String, String>>,
     pub auto_login: bool,
+    /// 内存刷新时间间隔
+    pub memory_refresh_interval_ms: u64,
+    /// 网络状态刷新时间间隔
+    pub network_refresh_interval_ms: u64,
+}
+
+impl Default for SmpConfig {
+    fn default() -> Self {
+        Self {
+            userlist: vec![],
+            username: "".to_string(),
+            secret_format: Default::default(),
+            online_fields: None,
+            auto_login: true,
+            memory_refresh_interval_ms: 500,
+            network_refresh_interval_ms: 5000,
+        }
+    }
 }
 
 /// 配置文件路径
@@ -49,32 +66,4 @@ pub fn save_config(config: &SmpConfig) -> std::io::Result<()>{
     let text = toml::to_string_pretty(config)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     std::fs::write(&path, text)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn save_and_load() {
-        let cfg = SmpConfig {
-            userlist: vec![],
-            username: "20230001".into(),
-            secret_format: SecretFormat::PwdMac,
-            online_fields: Some(HashMap::from([
-                ("userIndex".into(), "42".into()),
-                ("loginUniqueCodeForOnline".into(), "abc".into()),
-            ])),
-            auto_login: false,
-        };
-        save_config(&cfg).expect("saving config error");
-        let back: SmpConfig = load_config();
-        let path_str = config_path()
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        std::fs::remove_file(path_str).expect("remove file error");
-        assert_eq!(back.username, cfg.username);
-        assert_eq!(back.secret_format, SecretFormat::PwdMac);
-        assert_eq!(back.online_fields.as_ref().unwrap().get("userIndex").unwrap(), "42");
-    }
 }

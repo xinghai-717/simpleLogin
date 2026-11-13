@@ -6,6 +6,7 @@ use crate::widgets::{ToastLevel, ToastManager};
 use crate::smp::save_config;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};
 use reqwest::Error;
+use crate::auto_login_manager::AutoLoginState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NetworkOperation { Online, Offline }
@@ -50,6 +51,7 @@ impl HomePage {
         smp_config: &mut SmpConfig,
         username: &str,
         password: &str,
+        auto_login_state: AutoLoginState
     ) {
         ui.add_space(6.0);
         let status_str = match &self.status {
@@ -71,11 +73,17 @@ impl HomePage {
 
         ui.add_space(10.0);
 
-        // 👈 处理中：显示加载圈，禁用按钮
-        if self.is_processing {
+        if self.is_processing || auto_login_state == AutoLoginState::Reconnecting {
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.label("正在请求中...");
+                match auto_login_state {
+                    AutoLoginState::Reconnecting => {
+                        ui.colored_label(egui::Color32::YELLOW, "网络已断开，正在后台重连...");
+                    }
+                    _ => {
+                        ui.label("正在请求中...");
+                    }
+                }
             });
         } else {
             if ui.button("执行操作").clicked() {

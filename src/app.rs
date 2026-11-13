@@ -16,7 +16,7 @@ use crate::smp::{SmpConfig, load_config, make_client, do_status};
 use reqwest::blocking::Client;
 use tray_icon::menu::MenuEvent;
 use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
-use crate::auto_login_manager::{AutoLoginManager, AutoLoginState};
+use crate::auto_login_manager::{AutoLoginManager, AutoLoginState, AutoLoginEvent};
 use crate::tray::TrayApp;
 
 pub struct MyApp {
@@ -36,10 +36,6 @@ pub struct MyApp {
     last_memory_refresh: Instant,
     /// 上次刷新网络状态时间
     last_network_refresh: Instant,
-    /// 内存刷新时间间隔
-    memory_refresh_interval: Duration,
-    /// 网络状态刷新时间间隔
-    network_refresh_interval: Duration,
     /// 主题样式
     app_theme: AppTheme,
     /// 配置文件
@@ -80,12 +76,6 @@ impl MyApp {
         let app_theme = cc.storage
             .and_then(|s| eframe::get_value(s, "app_theme"))
             .unwrap_or(AppTheme::System);
-        let memory_refresh_interval = cc.storage
-            .and_then(|s| eframe::get_value(s, "memory_refresh_interval"))
-            .unwrap_or(Duration::from_millis(500));
-        let network_refresh_interval = cc.storage
-            .and_then(|s| eframe::get_value(s, "network_refresh_interval"))
-            .unwrap_or(Duration::from_secs(5));
 
         let config = load_config();
         cc.egui_ctx.set_theme(match app_theme {
@@ -117,8 +107,6 @@ impl MyApp {
             memory,
             last_memory_refresh: Instant::now(),
             last_network_refresh: Instant::now(),
-            memory_refresh_interval,
-            network_refresh_interval,
             app_theme,
             smp_config: config.clone(),
             toast_manager: ToastManager::new(),
@@ -137,7 +125,7 @@ impl MyApp {
     }
 
     fn refresh_memory_if_needed(&mut self) {
-        if self.last_memory_refresh.elapsed() < self.memory_refresh_interval {
+        if self.last_memory_refresh.elapsed() < Duration::from_millis(self.smp_config.memory_refresh_interval_ms) {
             return;
         }
         self.sys.refresh_processes_specifics(
@@ -155,7 +143,7 @@ impl MyApp {
             return;
         }
 
-        if self.last_network_refresh.elapsed() < self.network_refresh_interval {
+        if self.last_network_refresh.elapsed() < Duration::from_millis(self.smp_config.network_refresh_interval_ms) {
             return;
         }
 
@@ -226,16 +214,16 @@ impl eframe::App for MyApp {
 
             for event in events {
                 match event {
-                    crate::auto_login_manager::AutoLoginEvent::ReconnectSuccess(online_fields) => {
+                    AutoLoginEvent::ReconnectSuccess(online_fields) => {
                         self.smp_config.online_fields = Some(online_fields);
                         let _ = save_config(&self.smp_config);
                         self.toast_manager.push(ToastLevel::Success, "重连成功！");
                         self.home.status = Some(AuthStatus::Online);
                     }
-                    crate::auto_login_manager::AutoLoginEvent::ReconnectFailed(reason) => {
+                    AutoLoginEvent::ReconnectFailed(reason) => {
                         tracing::warn!("后台自动重连失败: {}", reason);
                     }
-                    crate::auto_login_manager::AutoLoginEvent::RetriesExhausted => {
+                    AutoLoginEvent::RetriesExhausted => {
                         self.toast_manager.push(ToastLevel::Error, "多次重连失败，已停止自动重连，请手动检查");
                         tracing::error!("多次重连失败，已停止自动重连，请手动检查");
                     }
@@ -320,7 +308,8 @@ impl eframe::App for MyApp {
                     &mut self.toast_manager,
                     &mut self.smp_config,
                     &self.account.username,
-                    &self.account.password
+                    &self.account.password,
+                    self.auto_login_manager.state
                 ),
                 Page::Account => self.account.ui(ui, &mut self.toast_manager, &mut self.smp_config, &self.home.status),
                 Page::Settings => self.settings
@@ -338,8 +327,6 @@ impl eframe::App for MyApp {
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, "app_theme", &self.app_theme);
-        eframe::set_value(storage, "memory_refresh_interval", &self.memory_refresh_interval);
-        eframe::set_value(storage, "network_refresh_interval", &self.network_refresh_interval);
 
         // 避免配置文件被占用或磁盘满时导致程序直接崩溃
         if let Err(e) = save_config(&self.smp_config) {
@@ -351,7 +338,7 @@ impl eframe::App for MyApp {
     fn on_exit(&mut self, _gl: Option<&Context>) {
         if self.smp_config.online_fields.is_some() {
             let config_clone = self.smp_config.clone();
-            std::thread::spawn(move || {
+            let handle = std::thread::spawn(move || {
                 // 给关闭时的请求一个极短超时（比如1秒），确保不拖沓
                 let short_client = Client::builder()
                     .timeout(Duration::from_secs(1))
@@ -362,6 +349,7 @@ impl eframe::App for MyApp {
                     let _ = do_logout(&client, &config_clone);
                 }
             });
+            let _ = handle.join();
         }
     }
 

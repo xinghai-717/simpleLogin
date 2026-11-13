@@ -80,6 +80,39 @@ impl SettingsPage {
                 }
             }
         }
+
+        ui.horizontal(|ui| {
+            ui.label("内存监控间隔:");
+
+            // 把毫秒转换为秒
+            let mut mem_secs = smp_config.memory_refresh_interval_ms as f32 / 1000.0;
+
+            let slider = egui::Slider::new(&mut mem_secs, 0.5..=10.0)
+                .step_by(0.5)
+                .suffix(" 秒")
+                .logarithmic(true);
+
+            if ui.add(slider).changed() {
+                smp_config.memory_refresh_interval_ms = (mem_secs * 1000.0) as u64;
+                let _ = save_config(smp_config);
+            }
+        });
+
+        ui.horizontal(|ui| {
+            ui.label("网络检测间隔:");
+
+            let mut net_secs = smp_config.network_refresh_interval_ms as f32 / 1000.0;
+
+            let slider = egui::Slider::new(&mut net_secs, 1.0..=60.0)
+                .step_by(1.0)
+                .suffix(" 秒");
+
+            if ui.add(slider).changed() {
+                smp_config.network_refresh_interval_ms = (net_secs * 1000.0) as u64;
+                let _ = save_config(smp_config);
+            }
+        });
+
         ui.separator();
         ui.label(format!("内存占用: {mb}"));
     }
