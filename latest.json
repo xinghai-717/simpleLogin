@@ -5,10 +5,10 @@
   "packages": {
     "x86_64-pc-windows-msvc": {
       "url": "https://simplelogin.wrh6.qzz.io/simplelogin.exe",
-      "signature": "n2mnk3AvRG3RGLBmNtTiSC4kY063wcolPdB5Jk32t7y/lOX0WcmCIx/c9M+ws/0Y7bmGT8yUlmm/sNi+VpcpAg==",
-      "checksum": "sha256:0d7cb2e02fa8f9eecb4c065e8fa2a7e7d1e1121d12de6bce80276ef924c6cf58",
+      "signature": "W8cu2xYCKq7tuAZHaU8DUa0IlrnCDNpOvG4Va3p3wrmsQ2pHPFdM1WLkFsgRAC6c3fDVAt3GMRn6dwtOG7OIDQ==",
+      "checksum": "sha256:6a5474b2159e13f2b97cb5f6471c8eca282a4888e1a825df7b6d655b8a401f32",
       "package_type": "binary",
-      "size": 42019840
+      "size": 42010112
     }
   }
 }

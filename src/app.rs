@@ -18,6 +18,7 @@ use tray_icon::menu::MenuEvent;
 use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
 use crate::auto_login_manager::{AutoLoginManager, AutoLoginState, AutoLoginEvent};
 use crate::tray::TrayApp;
+use crate::update_manager::{UpdateManager, UpdateState};
 
 pub struct MyApp {
     /// 托盘
@@ -64,6 +65,14 @@ pub struct MyApp {
     auto_login_manager: AutoLoginManager,
     /// 上次的自动登录状态
     last_auto_login: bool,
+    /// 记录启动时检查更新
+    has_checked_update_on_startup: bool,
+    /// 更新管理器
+    update_manager: UpdateManager,
+    /// 上一次更新检查结果
+    last_update_state: UpdateState,
+    /// 重启倒计时
+    auto_restart_countdown: Option<Instant>,
 }
 
 impl MyApp {
@@ -121,6 +130,10 @@ impl MyApp {
             status_rx: None,
             auto_login_manager: AutoLoginManager::new(),
             last_auto_login: false,
+            has_checked_update_on_startup: false,
+            update_manager: UpdateManager::new(),
+            last_update_state: UpdateState::Idle,
+            auto_restart_countdown: None,
         }
     }
 
@@ -231,6 +244,57 @@ impl eframe::App for MyApp {
             }
         }
 
+        // 启动时自动检查
+        if !self.has_checked_update_on_startup {
+            self.has_checked_update_on_startup = true;
+            self.update_manager.start_check(true);
+        }
+        self.update_manager.tick(ctx);
+
+        if self.update_manager.state != self.last_update_state {
+            match &self.update_manager.state {
+                UpdateState::Downloading { progress } if *progress == 0.0 => {
+                    if self.update_manager.is_auto_restart {
+                        self.toast_manager.push(ToastLevel::Info, "发现新版本，正在后台静默下载并安装...");
+                    }
+                }
+                UpdateState::ReadyToRestart => {
+                    if self.update_manager.is_auto_restart {
+                        self.toast_manager.push(ToastLevel::Success, "更新已就绪，程序将在 3 秒后自动重启...");
+                        self.auto_restart_countdown = Some(Instant::now()); // 开始倒计时
+                    } else {
+                        self.toast_manager.push(ToastLevel::Success, "更新已下载，请在关于页面手动重启。");
+                    }
+                }
+                UpdateState::Error(e) => {
+                    self.toast_manager.push(ToastLevel::Error, format!("更新失败: {}", e));
+                }
+                _ => {}
+            }
+            self.last_update_state = self.update_manager.state.clone();
+        }
+
+        // 处理自动重启倒计时
+        if let Some(start_time) = self.auto_restart_countdown {
+            if start_time.elapsed() > Duration::from_secs(3) {
+                self.auto_restart_countdown = None;
+                if let Some(update) = self.update_manager.pending_update.take() {
+                    // 执行重启
+                    let result = update.restart_with(|ctx| { ctx.before_exit(|| {}); });
+                    if result.is_err() {
+                        self.toast_manager.push(ToastLevel::Error, "自动重启失败，请稍后重试。");
+                        // 失败后回退状态，否则程序会一直卡在“正在重启”的假象中
+                        self.update_manager.state = UpdateState::Idle;
+                        self.update_manager.is_auto_restart = false;
+                        self.last_update_state = UpdateState::Idle;
+                    }
+                }
+            } else {
+                // 倒计时期间保持刷新，保证 Toast 能动
+                ctx.request_repaint_after(Duration::from_millis(100));
+            }
+        }
+
         // 检查是否有“关闭窗口”的请求
         if ctx.input(|i| i.viewport().close_requested()) && !self.is_quitting {
             // 发送 CancelClose，阻止程序退出
@@ -327,7 +391,7 @@ impl eframe::App for MyApp {
                         &mut self.smp_config,
                     ),
                 Page::Logs => self.log.ui(ui, &self.log_buffer),
-                Page::About => self.about.ui(ui, &mut self.toast_manager),
+                Page::About => self.about.ui(ui, &mut self.toast_manager, &mut self.update_manager),
             }
         });
     }

@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use shipup::{Updater, UpdateEvent};
 use std::time::Duration;
-use crate::pages::about::{UpdateMessage, UpdateState};
+use crate::update_manager::{UpdateMessage, UpdateState};
 
 fn get_manifest_url() -> &'static str {
     if cfg!(debug_assertions) {
@@ -11,7 +11,12 @@ fn get_manifest_url() -> &'static str {
         "https://simplelogin.wrh6.qzz.io/last.json"
     }
 }
-pub fn run_update_worker(tx: std::sync::mpsc::Sender<UpdateMessage>, cancel_flag: Arc<AtomicBool>) {
+
+pub fn run_update_worker(
+    tx: std::sync::mpsc::Sender<UpdateMessage>,
+    cancel_flag: Arc<AtomicBool>,
+    _auto_restart: bool, // 内部不再需要这个参数了
+) {
     let _ = tx.send(UpdateMessage::State(UpdateState::Checking));
 
     let builder = match Updater::builder().current_version(env!("CARGO_PKG_VERSION")) {
@@ -52,32 +57,18 @@ pub fn run_update_worker(tx: std::sync::mpsc::Sender<UpdateMessage>, cancel_flag
                     _ => {}
                 },
             );
+
             match result {
                 Ok(_) => {
-                    use std::sync::atomic::Ordering;
-                    if cancel_flag.load(Ordering::Relaxed) {
-                        let _ = tx.send(UpdateMessage::State(UpdateState::Idle));
-                    } else {
-                        let _ = tx.send(UpdateMessage::ReadyToRestart(update));
-                    }
+                    // 统一下发对象，交给主线程决定
+                    let _ = tx.send(UpdateMessage::ReadyToRestart(update));
                 }
                 Err(e) => {
-                    use std::sync::atomic::Ordering;
-                    if cancel_flag.load(Ordering::Relaxed) {
-                        // 是因为点了取消而产生的错误，静默处理即可
-                        let _ = tx.send(UpdateMessage::State(UpdateState::Idle));
-                    } else {
-                        // 真正的网络错误
-                        let _ = tx.send(UpdateMessage::State(UpdateState::Error(e.to_string())));
-                    }
+                    let _ = tx.send(UpdateMessage::State(UpdateState::Error(e.to_string())));
                 }
             }
         }
-        Ok(None) => {
-            let _ = tx.send(UpdateMessage::State(UpdateState::UpToDate));
-        }
-        Err(e) => {
-            let _ = tx.send(UpdateMessage::State(UpdateState::Error(e.to_string())));
-        }
+        Ok(None) => { let _ = tx.send(UpdateMessage::State(UpdateState::UpToDate)); }
+        Err(e) => { let _ = tx.send(UpdateMessage::State(UpdateState::Error(e.to_string()))); }
     }
 }
