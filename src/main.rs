@@ -5,6 +5,7 @@ mod widgets;
 mod logger;
 mod updater;
 mod tray;
+mod autostart;
 
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;
@@ -25,7 +26,7 @@ fn load_icon() -> egui::IconData {
 }
 
 fn main() -> eframe::Result {
-    let mut options = eframe::NativeOptions {
+    let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_icon(Arc::new(load_icon()))
             .with_inner_size([545.0, 355.0])

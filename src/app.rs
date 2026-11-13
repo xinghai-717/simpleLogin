@@ -16,6 +16,7 @@ use crate::smp::{SmpConfig, load_config, make_client, do_status};
 use reqwest::blocking::Client;
 use tray_icon::menu::MenuEvent;
 use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
+use crate::autostart;
 use crate::tray::TrayApp;
 
 pub struct MyApp {
@@ -251,7 +252,7 @@ impl eframe::App for MyApp {
                     &self.account.password
                 ),
                 Page::Account => self.account.ui(ui, &mut self.toast_manager, &mut self.smp_config, &self.home.status),
-                Page::Settings => self.settings.ui(ui, &mut self.app_theme, &self.memory),
+                Page::Settings => self.settings.ui(ui, &mut self.app_theme, &self.memory, &mut self.toast_manager),
                 Page::Logs => self.log.ui(ui, &self.log_buffer),
                 Page::About => self.about.ui(ui),
             }

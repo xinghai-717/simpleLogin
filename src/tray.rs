@@ -1,7 +1,7 @@
 use image::GenericImageView;
 use tray_icon::{
-    menu::{Menu, MenuItem, MenuEvent},
-    TrayIcon, TrayIconBuilder, TrayIconEvent,
+    menu::{Menu, MenuItem},
+    TrayIcon, TrayIconBuilder,
 };
 
 pub struct TrayApp {

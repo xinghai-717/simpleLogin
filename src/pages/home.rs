@@ -1,7 +1,7 @@
 use eframe::egui;
 use reqwest::blocking::Client;
 use simple_login::smp::{AuthStatus, do_status, do_login, do_logout, LoginResult, LogoutResult, LoginParams, SmpConfig, get_intercept_url};
-use tracing::{info, error, warn, debug};
+use tracing::{info, error, warn};
 use crate::widgets::{ToastLevel, ToastManager};
 use crate::smp::save_config;
 use std::sync::mpsc::{channel, Receiver, TryRecvError};

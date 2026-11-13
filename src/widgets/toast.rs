@@ -83,7 +83,7 @@ impl ToastManager {
                 toast.close_start_time = Some(now);
             }
 
-            // 👈 1. 计算 X 轴滑动偏移量 (基于锚点的相对距离)
+            // 计算 X 轴滑动偏移量 (基于锚点的相对距离)
             // 正常显示时，距离右边缘 -margin
             let target_x_offset = -margin;
             // 滑出屏幕外时，向右偏移 400 像素
@@ -103,7 +103,7 @@ impl ToastManager {
                 offscreen_x_offset + (target_x_offset - offscreen_x_offset) * t
             };
 
-            // 👈 2. 计算 Y 轴堆叠偏移量
+            // 计算 Y 轴堆叠偏移量
             let toast_height = 48.0;
             let target_y_offset = -margin - (toast_height + spacing) * i as f32;
             let current_y_offset = ctx.animate_value_with_time(
@@ -124,8 +124,8 @@ impl ToastManager {
             let level_color = toast.level.color();
             let area_id = Id::unique(("toast_area", toast.id));
 
-            // 👈 1. 精确测量文本宽度
-            let painter = ctx.layer_painter(egui::LayerId::new(Order::Background, Id::new("toast_measure")));
+            // 精确测量文本宽度
+            let painter = ctx.layer_painter(egui::LayerId::new(Order::Background, Id::unique("toast_measure")));
             let galley = painter.layout_no_wrap(
                 toast.message.clone(),
                 egui::FontId::proportional(13.0),
@@ -133,7 +133,7 @@ impl ToastManager {
             );
             let text_width = galley.size().x;
 
-            // 👈 2. 根据文字长度计算弹窗总宽度
+            // 根据文字长度计算弹窗总宽度
             // 基础宽度 60.0 = 左侧竖条(4) + 间距(8) + 右侧X按钮(28) + 左右内边距(20)
             // 限制最小 120，最大 400（超过 400 就会截断）
             let total_width = (text_width + 60.0).clamp(120.0, 400.0);
@@ -164,7 +164,7 @@ impl ToastManager {
                         });
 
                     frame.show(ui, |ui| {
-                        // 👈 3. 强制限制整个 UI 的宽度
+                        // 强制限制整个 UI 的宽度
                         ui.set_width(total_width - 20.0); // 减去 Frame 的左右 10px 内边距
 
                         ui.horizontal(|ui| {
@@ -173,7 +173,7 @@ impl ToastManager {
                             ui.painter().rect_filled(rect, 2.0, level_color.gamma_multiply(opacity));
                             ui.add_space(4.0);
 
-                            // 👈 4. 给文字精确分配空间，逼迫它截断
+                            // 给文字精确分配空间，逼迫它截断
                             let available_for_text = ui.available_width() - 24.0; // 留出 24px 给右侧按钮
                             ui.allocate_ui_with_layout(
                                 egui::vec2(available_for_text, ui.available_height()),

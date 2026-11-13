@@ -21,7 +21,7 @@ pub fn run_update_worker(tx: std::sync::mpsc::Sender<UpdateMessage>, cancel_flag
             return;
         }
     };
-    let mut updater = match builder.manifest_url(get_manifest_url())
+    let updater = match builder.manifest_url(get_manifest_url())
         .public_key(include_str!(".././keys/ed25519.pub"))
         .timeout(Duration::from_secs(30))
         .dangerous_insecure_transport_protocol(true)
