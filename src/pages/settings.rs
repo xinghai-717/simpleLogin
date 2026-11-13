@@ -17,7 +17,14 @@ impl SettingsPage {
             auto_login_enabled
         }
     }
-    pub fn ui(&mut self, ui: &mut egui::Ui, app_theme: &mut AppTheme, memory: &Option<u64>, toast_manager: &mut ToastManager, smp_config: &mut SmpConfig) {
+    pub fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        app_theme: &mut AppTheme,
+        memory: &Option<u64>,
+        toast_manager: &mut ToastManager,
+        smp_config: &mut SmpConfig,
+    ) {
         let mb = memory
             .map(|b| format!("{:.1} MB", b as f64 / 1024.0 /1024.0))
             .unwrap_or_else(|| "N/A".to_string());

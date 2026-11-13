@@ -7,20 +7,23 @@ use tray_icon::{
 pub struct TrayApp {
     pub tray_icon: TrayIcon,
     pub quit_item: MenuItem,
+    pub auto_login_status_item: MenuItem,
     pub show_item: MenuItem,
 }
 
 impl TrayApp {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let icon_bytes = include_bytes!("../assets/app.ico"); // 确保路径正确
+        let icon_bytes = include_bytes!("../assets/app.ico");
         let img = image::load_from_memory(icon_bytes)?;
         let (width, height) = img.dimensions();
         let icon = tray_icon::Icon::from_rgba(img.to_rgba8().into_raw(), width, height)?;
 
         let menu = Menu::new();
         let show_item = MenuItem::new("显示主界面", true, None);
+        let auto_login_status_item = MenuItem::new("守护状态:关闭", false, None);
         let quit_item = MenuItem::new("退出", true, None);
         menu.append(&show_item)?;
+        menu.append(&auto_login_status_item)?;
         menu.append(&quit_item)?;
 
         let tray_icon = TrayIconBuilder::new()
@@ -32,6 +35,7 @@ impl TrayApp {
         Ok(Self {
             tray_icon,
             quit_item,
+            auto_login_status_item,
             show_item,
         })
     }

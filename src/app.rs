@@ -66,6 +66,8 @@ pub struct MyApp {
     status_rx: Option<std::sync::mpsc::Receiver<AuthStatus>>,
     /// 自动登录管理器
     auto_login_manager: AutoLoginManager,
+    /// 上次的自动登录状态
+    last_auto_login: bool,
 }
 
 impl MyApp {
@@ -103,6 +105,9 @@ impl MyApp {
         let memory = sys.process(pid).map(|p| p.memory());
         let client = make_client();
 
+        let status = if config.auto_login { "开启" } else { "关闭" };
+        tray_app.auto_login_status_item.set_text(format!("守护状态: {}", status));
+
         Self {
             tray_app,
             is_window_visible: true,
@@ -127,6 +132,7 @@ impl MyApp {
             client,
             status_rx: None,
             auto_login_manager: AutoLoginManager::new(),
+            last_auto_login: false,
         }
     }
 
@@ -181,6 +187,12 @@ impl MyApp {
 
 impl eframe::App for MyApp {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.smp_config.auto_login != self.last_auto_login {
+            let status = if self.smp_config.auto_login { "开启" } else { "关闭" };
+            self.tray_app.auto_login_status_item.set_text(format!("守护状态: {}", status));
+            self.last_auto_login = self.smp_config.auto_login;
+        }
+
         if ctx.cumulative_pass_nr() == 1 {
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
         }
@@ -311,7 +323,13 @@ impl eframe::App for MyApp {
                     &self.account.password
                 ),
                 Page::Account => self.account.ui(ui, &mut self.toast_manager, &mut self.smp_config, &self.home.status),
-                Page::Settings => self.settings.ui(ui, &mut self.app_theme, &self.memory, &mut self.toast_manager, &mut self.smp_config),
+                Page::Settings => self.settings
+                    .ui(ui,
+                        &mut self.app_theme,
+                        &self.memory,
+                        &mut self.toast_manager,
+                        &mut self.smp_config,
+                    ),
                 Page::Logs => self.log.ui(ui, &self.log_buffer),
                 Page::About => self.about.ui(ui),
             }
