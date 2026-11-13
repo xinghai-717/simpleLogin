@@ -1,14 +1,14 @@
 {
-  "version": "0.1.1",
+  "version": "1.9.9",
   "force_update": false,
-  "pub_date": "2026-11-12T13:26:29Z",
+  "pub_date": "2026-11-13T13:02:09Z",
   "packages": {
     "x86_64-pc-windows-msvc": {
       "url": "https://simplelogin.wrh6.qzz.io/simplelogin.exe",
-      "signature": "YxFMZs40hxk5jactG33nvZG27HHVyMjNHtBJeNLpDN4ilXPbE1I9dWSz6BdLYx3O1N4L/S/mSKHFmxuOC6MrDA==",
-      "checksum": "sha256:22a99e81dd131734dc1a91b8cc40b36d174e616e106d0dab0e971b3ccfffecaf",
+      "signature": "n2mnk3AvRG3RGLBmNtTiSC4kY063wcolPdB5Jk32t7y/lOX0WcmCIx/c9M+ws/0Y7bmGT8yUlmm/sNi+VpcpAg==",
+      "checksum": "sha256:0d7cb2e02fa8f9eecb4c065e8fa2a7e7d1e1121d12de6bce80276ef924c6cf58",
       "package_type": "binary",
-      "size": 35586048
+      "size": 42019840
     }
   }
 }

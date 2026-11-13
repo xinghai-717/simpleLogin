@@ -1,9 +1,11 @@
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use eframe::egui;
 use shipup::Update;
 use crate::updater::run_update_worker;
+use crate::widgets::{ToastLevel, ToastManager};
 
 #[derive(Debug, Clone, PartialEq)]
 /// 更新状态
@@ -33,6 +35,9 @@ pub struct AboutPage {
     pub update_rx: Option<Receiver<UpdateMessage>>,
     pub cancel_flag: Arc<AtomicBool>,
     pending_update: Option<Update>,
+    click_count: u32,
+    last_click_time: Option<Instant>,
+    is_egg_unlocked: bool,
 }
 
 impl Default for AboutPage {
@@ -42,16 +47,81 @@ impl Default for AboutPage {
             update_rx: None,
             cancel_flag: Arc::new(AtomicBool::new(false)),
             pending_update: None,
+            click_count: 0,
+            last_click_time: None,
+            is_egg_unlocked: false,
         }
     }
 }
 
 impl AboutPage {
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
-        let version = env!("CARGO_PKG_VERSION");
+    pub fn ui(&mut self, ui: &mut egui::Ui, toast_manager: &mut ToastManager) {
         ui.heading("关于");
         ui.separator();
-        ui.label(format!("版本号: v{version}"));
+
+
+        // 将版本号做成可点击的 Label
+        let version_text = format!("版本号 v{}", env!("CARGO_PKG_VERSION"));
+        let text_color = ui.visuals().text_color();
+        let version_label = ui.add(
+            egui::Label::new(egui::RichText::new(version_text).color(text_color))
+                .sense(egui::Sense::click())
+                .selectable(false)
+        );
+
+        // 如果点击了版本号
+        if version_label.clicked() {
+            let now = Instant::now();
+            // 如果两次点击间隔超过 1 秒，或者第一次点击，重置计数
+            if let Some(last_time) = self.last_click_time {
+                if now.duration_since(last_time) > Duration::from_secs(1) {
+                    self.click_count = 0;
+                }
+            }
+
+            self.click_count += 1;
+            self.last_click_time = Some(now);
+
+            if self.click_count >= 10 {
+                self.click_count = 0;
+                self.is_egg_unlocked = true;
+                toast_manager.push(ToastLevel::Success, "🎉 恭喜你发现了彩蛋！");
+            } else if self.click_count >= 6 {
+                toast_manager.push(ToastLevel::Info, format!("还差 {} 次...", 10 - self.click_count));
+            }
+        };
+
+        ui.horizontal(|ui| {
+            ui.add(egui::Label::new("作者:").selectable(false));
+            ui.hyperlink_to(
+                "星海",
+                "https://github.com/xinghai-717"
+            );
+        });
+        ui.horizontal(|ui| {
+            ui.add(egui::Label::new("源代码仓库").selectable(false));
+            ui.hyperlink_to(
+                "Github",
+                "https://github.com/xinghai-717/simpleLogin"
+            );
+        });
+        ui.horizontal(|ui| {
+            ui.add(egui::Label::new("开源协议:").selectable(false));
+            ui.hyperlink_to(
+                "GPLv3",
+                "https://www.gnu.org/licenses/gpl-3.0.html"
+            );
+        });
+
+        // 如果彩蛋解锁了，展示特殊内容
+        if self.is_egg_unlocked {
+            ui.add_space(10.0);
+            ui.colored_label(
+                egui::Color32::from_rgb(255, 165, 0),
+                "✨ You found the secret! ✨"
+            );
+            ui.label("感谢你使用 SimpleLogin");
+        }
 
         match &self.update_state {
             UpdateState::Idle => {
@@ -62,7 +132,7 @@ impl AboutPage {
                     let (tx, rx) = channel();
                     self.update_rx = Some(rx);
 
-                    // 👈 提取需要的变量传给后台
+                    // 提取需要的变量传给后台
                     let cancel = self.cancel_flag.clone();
 
                     std::thread::spawn(move || {
@@ -133,7 +203,7 @@ impl AboutPage {
                 }
             }
             // 强制界面持续重绘，确保进度条和转圈圈能动
-            ui.ctx().request_repaint_after(std::time::Duration::from_millis(100));
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
         }
     }
 }

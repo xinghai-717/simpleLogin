@@ -327,7 +327,7 @@ impl eframe::App for MyApp {
                         &mut self.smp_config,
                     ),
                 Page::Logs => self.log.ui(ui, &self.log_buffer),
-                Page::About => self.about.ui(ui),
+                Page::About => self.about.ui(ui, &mut self.toast_manager),
             }
         });
     }
