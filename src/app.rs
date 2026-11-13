@@ -138,6 +138,17 @@ impl MyApp {
 
     // 将 do_status 移入后台线程，防止卡死
     fn refresh_network_status_async(&mut self, ctx: &egui::Context) {
+        // 轮询是否拿到了结果
+        if let Some(rx) = &self.status_rx {
+            if let Ok(new_status) = rx.try_recv() {
+                self.home.status = Some(new_status);
+                self.status_rx = None;
+            } else {
+                // 等待结果期间，高频重绘
+                ctx.request_repaint_after(Duration::from_millis(100));
+            }
+        }
+
         // 如果正在登录/登出，暂停自动轮询，避免状态冲突
         if self.home.is_processing{
             return;
@@ -158,17 +169,6 @@ impl MyApp {
                 let status = do_status(&client);
                 let _ = tx.send(status);
             });
-        }
-
-        // 轮询是否拿到了结果
-        if let Some(rx) = &self.status_rx {
-            if let Ok(new_status) = rx.try_recv() {
-                self.home.status = Some(new_status);
-                self.status_rx = None;
-            } else {
-                // 等待结果期间，高频重绘
-                ctx.request_repaint_after(Duration::from_millis(100));
-            }
         }
     }
 }
