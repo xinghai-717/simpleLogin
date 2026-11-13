@@ -1,22 +1,23 @@
 use eframe::egui;
+use tracing::error;
+use simple_login::smp::{save_config, SmpConfig};
 use crate::autostart;
 use crate::theme::AppTheme;
 use crate::widgets::{ToastLevel, ToastManager};
 
 pub struct SettingsPage {
     autostart_enabled: bool,
-}
-
-impl Default for SettingsPage {
-    fn default() -> Self {
-        Self {
-            autostart_enabled: autostart::is_autostart_enabled().unwrap_or(false),
-        }
-    }
+    auto_login_enabled: bool,
 }
 
 impl SettingsPage {
-    pub fn ui(&mut self, ui: &mut egui::Ui, app_theme: &mut AppTheme, memory: &Option<u64>, toast_manager: &mut ToastManager) {
+    pub fn new(auto_login_enabled: bool) -> Self {
+        Self {
+            autostart_enabled: autostart::is_autostart_enabled().unwrap_or(false),
+            auto_login_enabled
+        }
+    }
+    pub fn ui(&mut self, ui: &mut egui::Ui, app_theme: &mut AppTheme, memory: &Option<u64>, toast_manager: &mut ToastManager, smp_config: &mut SmpConfig) {
         let mb = memory
             .map(|b| format!("{:.1} MB", b as f64 / 1024.0 /1024.0))
             .unwrap_or_else(|| "N/A".to_string());
@@ -55,6 +56,20 @@ impl SettingsPage {
 
                     // 如果操作失败，将 UI 状态恢复，防止界面与实际状态不符
                     self.autostart_enabled = !self.autostart_enabled;
+                }
+            }
+        }
+
+        if ui.checkbox(&mut self.auto_login_enabled, "状态守护").changed() {
+            smp_config.auto_login = self.auto_login_enabled;
+            match save_config(smp_config) {
+                Ok(_) => {
+                    toast_manager.push(ToastLevel::Success, if self.auto_login_enabled { "状态守护开启成功" } else { "状态守护关闭成功" })
+                }
+                Err(e) => {
+                    toast_manager.push(ToastLevel::Error,if self.auto_login_enabled { "状态守护开启失败" } else { "状态守护关闭失败" });
+                    self.auto_login_enabled = !self.auto_login_enabled;
+                    error!("守护状态保存失败: {}", e)
                 }
             }
         }

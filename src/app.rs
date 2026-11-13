@@ -16,32 +16,56 @@ use crate::smp::{SmpConfig, load_config, make_client, do_status};
 use reqwest::blocking::Client;
 use tray_icon::menu::MenuEvent;
 use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
-use crate::autostart;
+use crate::auto_login_manager::{AutoLoginManager, AutoLoginState};
 use crate::tray::TrayApp;
 
 pub struct MyApp {
+    /// 托盘
     tray_app: TrayApp,
+    /// 窗口是否可见
     is_window_visible: bool,
+    /// 是否正在退出
     is_quitting: bool,
+    /// 系统信息
     sys: System,
+    /// 当前进程PID
     pid: Pid,
+    /// 内存占用
     memory: Option<u64>,
+    /// 上次刷新内存时间
     last_memory_refresh: Instant,
+    /// 上次刷新网络状态时间
     last_network_refresh: Instant,
+    /// 内存刷新时间间隔
     memory_refresh_interval: Duration,
+    /// 网络状态刷新时间间隔
     network_refresh_interval: Duration,
+    /// 主题样式
     app_theme: AppTheme,
+    /// 配置文件
     smp_config: SmpConfig,
+    /// 弹窗队列
     toast_manager: ToastManager,
+    /// 所有页面
     current_page: Page,
+    /// 主页
     home: HomePage,
+    // 账户页面
     account: AccountPage,
+    /// 设置页面
     settings: SettingsPage,
+    /// 日志页面
     log: LogPage,
+    /// 关于页面
     about: AboutPage,
+    /// 内存中的日志
     log_buffer: LogBuffer,
+    /// HTTP客户端
     client: Client,
+    /// 后台线程返回的网络状态
     status_rx: Option<std::sync::mpsc::Receiver<AuthStatus>>,
+    /// 自动登录管理器
+    auto_login_manager: AutoLoginManager,
 }
 
 impl MyApp {
@@ -96,12 +120,13 @@ impl MyApp {
             current_page: Page::default(),
             home: HomePage::new(&client),
             account: AccountPage::new(&config),
-            settings: SettingsPage::default(),
+            settings: SettingsPage::new(config.auto_login),
             log: LogPage::default(),
             about: AboutPage::default(),
             log_buffer,
             client,
             status_rx: None,
+            auto_login_manager: AutoLoginManager::new(),
         }
     }
 
@@ -117,10 +142,10 @@ impl MyApp {
         self.last_memory_refresh = Instant::now();
     }
 
-    // 👈 核心优化：将 do_status 移入后台线程，防止卡死
+    // 将 do_status 移入后台线程，防止卡死
     fn refresh_network_status_async(&mut self, ctx: &egui::Context) {
         // 如果正在登录/登出，暂停自动轮询，避免状态冲突
-        if self.home.is_processing {
+        if self.home.is_processing{
             return;
         }
 
@@ -171,6 +196,40 @@ impl eframe::App for MyApp {
 
         self.refresh_memory_if_needed();
         self.refresh_network_status_async(ctx);
+
+        let is_offline = matches!(self.home.status, Some(AuthStatus::Offline { .. }));
+        let is_online = matches!(self.home.status, Some(AuthStatus::Online));
+        if is_online && self.auto_login_manager.state == AutoLoginState::Suspended {
+            self.auto_login_manager.resume();
+        }
+
+        if !self.home.is_processing && self.smp_config.auto_login{
+            let events = self.auto_login_manager.tick(
+                &self.client,
+                &self.smp_config,
+                is_offline,
+                &self.account.username,
+                &self.account.password,
+            );
+
+            for event in events {
+                match event {
+                    crate::auto_login_manager::AutoLoginEvent::ReconnectSuccess(online_fields) => {
+                        self.smp_config.online_fields = Some(online_fields);
+                        let _ = save_config(&self.smp_config);
+                        self.toast_manager.push(ToastLevel::Success, "重连成功！");
+                        self.home.status = Some(AuthStatus::Online);
+                    }
+                    crate::auto_login_manager::AutoLoginEvent::ReconnectFailed(reason) => {
+                        tracing::warn!("后台自动重连失败: {}", reason);
+                    }
+                    crate::auto_login_manager::AutoLoginEvent::RetriesExhausted => {
+                        self.toast_manager.push(ToastLevel::Error, "多次重连失败，已停止自动重连，请手动检查");
+                        tracing::error!("多次重连失败，已停止自动重连，请手动检查");
+                    }
+                }
+            }
+        }
 
         // 检查是否有“关闭窗口”的请求
         if ctx.input(|i| i.viewport().close_requested()) && !self.is_quitting {
@@ -252,7 +311,7 @@ impl eframe::App for MyApp {
                     &self.account.password
                 ),
                 Page::Account => self.account.ui(ui, &mut self.toast_manager, &mut self.smp_config, &self.home.status),
-                Page::Settings => self.settings.ui(ui, &mut self.app_theme, &self.memory, &mut self.toast_manager),
+                Page::Settings => self.settings.ui(ui, &mut self.app_theme, &self.memory, &mut self.toast_manager, &mut self.smp_config),
                 Page::Logs => self.log.ui(ui, &self.log_buffer),
                 Page::About => self.about.ui(ui),
             }
@@ -264,7 +323,7 @@ impl eframe::App for MyApp {
         eframe::set_value(storage, "memory_refresh_interval", &self.memory_refresh_interval);
         eframe::set_value(storage, "network_refresh_interval", &self.network_refresh_interval);
 
-        // 👈 修复：避免配置文件被占用或磁盘满时导致程序直接崩溃
+        // 避免配置文件被占用或磁盘满时导致程序直接崩溃
         if let Err(e) = save_config(&self.smp_config) {
             tracing::error!("保存 smp_config 失败: {}", e);
         }

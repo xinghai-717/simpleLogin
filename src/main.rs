@@ -6,6 +6,7 @@ mod logger;
 mod updater;
 mod tray;
 mod autostart;
+mod auto_login_manager;
 
 use std::sync::{Arc, Mutex};
 use std::collections::VecDeque;

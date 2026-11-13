@@ -12,6 +12,7 @@ pub struct SmpConfig {
     pub secret_format: SecretFormat,
     /// 登录成功后保存的在线字段，供 logout 使用
     pub online_fields: Option<HashMap<String, String>>,
+    pub auto_login: bool,
 }
 
 /// 配置文件路径
@@ -22,9 +23,20 @@ pub fn config_path() -> Option<PathBuf> {
 
 /// 读取配置
 pub fn load_config() -> SmpConfig {
-    let Some(path) = config_path() else { return SmpConfig::default() };
-    let Ok(text) = std::fs::read_to_string(&path) else { return SmpConfig::default() };
-    toml::from_str(&text).unwrap_or_default()
+    let Some(path) = config_path() else {
+        tracing::warn!("无法获取配置文件路径，使用默认配置");
+        return SmpConfig::default();
+    };
+
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        tracing::info!("配置文件不存在，使用默认配置: {:?}", path);
+        return SmpConfig::default();
+    };
+
+    toml::from_str(&text).unwrap_or_else(|e| {
+        tracing::error!("配置文件解析失败，请检查 TOML 格式: {}", e);
+        SmpConfig::default()
+    })
 }
 
 /// 保存配置
@@ -53,6 +65,7 @@ mod tests {
                 ("userIndex".into(), "42".into()),
                 ("loginUniqueCodeForOnline".into(), "abc".into()),
             ])),
+            auto_login: false,
         };
         save_config(&cfg).expect("saving config error");
         let back: SmpConfig = load_config();
