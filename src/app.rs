@@ -248,11 +248,18 @@ impl eframe::App for MyApp {
             if event.id == self.tray_app.quit_item.id() {
                 // 点击了“退出”
                 self.is_quitting = true;
-                ctx.send_viewport_cmd(egui::ViewportCommand::Close)
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             } else if event.id == self.tray_app.show_item.id() {
                 // 点击了“显示主界面”
                 self.is_window_visible = true;
+
+                // 先取消最小化（如果窗口被最小化了）
+                ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+
+                // 显示窗口
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+
+                // 置前并聚焦
                 ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
             }
         }
